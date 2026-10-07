@@ -1,0 +1,10 @@
+[project]
+name = "coder-preentrega-5"
+version = "1.0.0"
+description = "Agente ReAct con LangGraph, herramientas propias y memoria persistente en SQLite."
+requires-python = ">=3.12"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+exclude = ["^\\.venv/"]

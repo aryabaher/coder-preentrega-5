@@ -1,0 +1,74 @@
+$ python historial.py conversacion-demo-1 "¿En qué estado está ese pedido y cuánto salió?"
+--- conversacion-demo-1: 16 mensajes recuperados de checkpoints.sqlite ---
+================================ Human Message =================================
+
+¿Cuántos pedidos tuvo Ana García y cuál fue el total?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_b4ICANhDHpnHSovlIq3rTYyn)
+ Call ID: call_b4ICANhDHpnHSovlIq3rTYyn
+  Args:
+    nombre: Ana García
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Ana García", "cliente_id": 102}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_pedidos (call_vdwlCLdDLkrfd1imgfaTAJfT)
+ Call ID: call_vdwlCLdDLkrfd1imgfaTAJfT
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_pedidos
+
+{"cliente_id": 102, "pedidos": 3, "total": 14500}
+================================== Ai Message ==================================
+
+Ana García tuvo un total de 3 pedidos y el monto total gastado es de $14.500.
+================================ Human Message =================================
+
+¿Y el último?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_ultimo_pedido (call_Jg6OO616uh27WJ0HqiIuUljF)
+ Call ID: call_Jg6OO616uh27WJ0HqiIuUljF
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_ultimo_pedido
+
+{"cliente_id": 102, "pedido_id": "P-1023", "fecha": "2026-09-28", "monto": 6200, "estado": "entregado"}
+================================== Ai Message ==================================
+
+El último pedido de Ana García fue el pedido ID P-1023, realizado el 28 de septiembre de 2026. El monto de este pedido fue de $6.200 y su estado es "entregado".
+================================ Human Message =================================
+
+¿Y Juan Pérez?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_vTlPebVbJMH09jlFev1PbCBm)
+ Call ID: call_vTlPebVbJMH09jlFev1PbCBm
+  Args:
+    nombre: Juan Pérez
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Juan Pérez", "cliente_id": 205}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_pedidos (call_CFePzjoDSY2c5F9MXeQQMLUh)
+ Call ID: call_CFePzjoDSY2c5F9MXeQQMLUh
+  Args:
+    cliente_id: 205
+================================= Tool Message =================================
+Name: buscar_pedidos
+
+{"cliente_id": 205, "pedidos": 1, "total": 3200}
+================================== Ai Message ==================================
+
+Juan Pérez tuvo un total de 1 pedido y el monto total gastado es de $3.200.
+
+Usuario: ¿En qué estado está ese pedido y cuánto salió?
+Herramientas: ['buscar_ultimo_pedido(cliente_id=205)']
+Respuesta: El pedido de Juan Pérez, ID P-2051, fue realizado el 14 de agosto de 2026. El monto de este pedido fue de $3.200 y su estado es "entregado".

@@ -1,0 +1,125 @@
+$ python main.py
+
+## turno_1_multi_paso (thread_id=conversacion-demo-1)
+Usuario: "¿Cuántos pedidos tuvo Ana García y cuál fue el total?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tuvo un total de 3 pedidos y el monto total gastado es de $14.500."
+
+## turno_2_memoria (thread_id=conversacion-demo-1)
+Usuario: "¿Y el último?"
+→ El agente decide usar la herramienta: buscar_ultimo_pedido(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedido_id": "P-1023", "fecha": "2026-09-28", "monto": 6200, "estado": "entregado"}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "El último pedido de Ana García fue el pedido ID P-1023, realizado el 28 de septiembre de 2026. El monto de este pedido fue de $6.200 y su estado es "entregado"."
+
+## turno_3_memoria_otro_cliente (thread_id=conversacion-demo-1)
+Usuario: "¿Y Juan Pérez?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Juan Pérez')
+→ La herramienta devuelve: {"nombre": "Juan Pérez", "cliente_id": 205}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=205)
+→ La herramienta devuelve: {"cliente_id": 205, "pedidos": 1, "total": 3200}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Juan Pérez tuvo un total de 1 pedido y el monto total gastado es de $3.200."
+
+## prueba_reintento_nombre_incompleto (thread_id=conversacion-reintento-1)
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tiene un total de 3 pedidos."
+
+## prueba_error_y_aclaracion (thread_id=conversacion-error-1)
+Usuario: "¿Cuántos pedidos tuvo el cliente Roberto Sánchez?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Roberto Sánchez')
+→ La herramienta devuelve: ERROR: no se encontró ningún cliente con el nombre 'Roberto Sánchez'. No inventes datos: pedile al usuario que confirme el nombre completo o el cliente_id.
+→ El agente razona: la herramienta devolvió ERROR → pide una aclaración, no inventa.
+Respuesta: "No se encontró ningún cliente con el nombre "Roberto Sánchez". ¿Podrías confirmar el nombre completo o proporcionarme el cliente_id?"
+
+## prueba_hilo_aislado (thread_id=conversacion-aislada-1)
+Usuario: "¿Y el último?"
+→ El agente razona: no necesita herramientas o le falta contexto → responde.
+Respuesta: "Por favor, indícame el nombre completo del cliente para poder buscar su último pedido."
+
+--- conversacion-demo-1: 16 mensajes en checkpoints.sqlite ---
+================================ Human Message =================================
+
+¿Cuántos pedidos tuvo Ana García y cuál fue el total?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_b4ICANhDHpnHSovlIq3rTYyn)
+ Call ID: call_b4ICANhDHpnHSovlIq3rTYyn
+  Args:
+    nombre: Ana García
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Ana García", "cliente_id": 102}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_pedidos (call_vdwlCLdDLkrfd1imgfaTAJfT)
+ Call ID: call_vdwlCLdDLkrfd1imgfaTAJfT
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_pedidos
+
+{"cliente_id": 102, "pedidos": 3, "total": 14500}
+================================== Ai Message ==================================
+
+Ana García tuvo un total de 3 pedidos y el monto total gastado es de $14.500.
+================================ Human Message =================================
+
+¿Y el último?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_ultimo_pedido (call_Jg6OO616uh27WJ0HqiIuUljF)
+ Call ID: call_Jg6OO616uh27WJ0HqiIuUljF
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_ultimo_pedido
+
+{"cliente_id": 102, "pedido_id": "P-1023", "fecha": "2026-09-28", "monto": 6200, "estado": "entregado"}
+================================== Ai Message ==================================
+
+El último pedido de Ana García fue el pedido ID P-1023, realizado el 28 de septiembre de 2026. El monto de este pedido fue de $6.200 y su estado es "entregado".
+================================ Human Message =================================
+
+¿Y Juan Pérez?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_vTlPebVbJMH09jlFev1PbCBm)
+ Call ID: call_vTlPebVbJMH09jlFev1PbCBm
+  Args:
+    nombre: Juan Pérez
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Juan Pérez", "cliente_id": 205}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_pedidos (call_CFePzjoDSY2c5F9MXeQQMLUh)
+ Call ID: call_CFePzjoDSY2c5F9MXeQQMLUh
+  Args:
+    cliente_id: 205
+================================= Tool Message =================================
+Name: buscar_pedidos
+
+{"cliente_id": 205, "pedidos": 1, "total": 3200}
+================================== Ai Message ==================================
+
+Juan Pérez tuvo un total de 1 pedido y el monto total gastado es de $3.200.
+
+Traza guardada en traza_ejecucion.json y traza_ejecucion.log

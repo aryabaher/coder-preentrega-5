@@ -1,0 +1,183 @@
+$ python validacion.py
+[OK] Python 3.12+ - 3.12.10
+[OK] agente.py: grafo = StateGraph(MessagesState)
+[OK] agente.py: async def nodo_modelo(state: MessagesState, config: RunnableConfig)
+[OK] agente.py: await obtener_llm_con_herramientas().ainvoke(mensajes)
+[OK] agente.py: grafo.add_node("modelo", nodo_modelo)
+[OK] agente.py: grafo.add_node("herramientas", ToolNode(herramientas, handle_tool_errors=True))
+[OK] agente.py: grafo.add_edge(START, "modelo")
+[OK] agente.py: tools_condition
+[OK] agente.py: {"tools": "herramientas", END: END}
+[OK] agente.py: grafo.add_edge("herramientas", "modelo")
+[OK] agente.py: llm_con_herramientas = llm.bind_tools(herramientas)
+[OK] agente.py: AsyncSqliteSaver.from_conn_string(ruta_db)
+[OK] agente.py: grafo.compile(checkpointer=checkpointer)
+[OK] agente.py: RECURSION_LIMIT = 10
+[OK] agente.py: "recursion_limit": recursion_limit
+[OK] agente.py: "thread_id": thread_id
+[OK] agente.py: except GraphRecursionError
+[OK] agente.py: trim_messages
+[OK] herramientas.py: @tool(args_schema=BuscarClienteInput)
+[OK] herramientas.py: def buscar_cliente_por_nombre(nombre: str) -> str:
+[OK] herramientas.py: @tool(args_schema=ClienteIdInput)
+[OK] herramientas.py: def buscar_pedidos(cliente_id: int) -> str:
+[OK] herramientas.py: def buscar_ultimo_pedido(cliente_id: int) -> str:
+[OK] herramientas.py: CLIENTES_DB
+[OK] herramientas.py: PEDIDOS_DB
+[OK] herramientas.py: herramientas = [buscar_cliente_por_nombre, buscar_pedidos, buscar_ultimo_pedido]
+[OK] modelo.py: ChatOpenAI(
+[OK] modelo.py: provider == "anthropic"
+[OK] modelo.py: os.getenv(variable)
+[OK] modelo.py: 401/key: falta
+[OK] main.py: async with abrir_agente(ruta_db) as app:
+[OK] main.py: recursion_limit=RECURSION_LIMIT
+[OK] main.py: app.aget_state({"configurable": {"thread_id": "conversacion-demo-1"}})
+[OK] main.py: mensaje.pretty_print()
+[OK] main.py: asyncio.run(main())
+[OK] main.py: load_dotenv(
+[OK] un solo StateGraph
+[OK] agente.py sin claves
+[OK] herramientas.py sin claves
+[OK] modelo.py sin claves
+[OK] main.py sin claves
+[OK] historial.py sin claves
+[OK] .env.example sin claves
+[OK] .env.example con las claves vacías
+[OK] .gitignore excluye .env y la base SQLite
+[OK] traza_ejecucion.json con el LLM real - openai:gpt-4o-mini
+[OK] traza: recursion_limit 10
+[OK] traza: turno 1 llama 2 herramientas - buscar_cliente_por_nombre(nombre='Ana García'), buscar_pedidos(cliente_id=102)
+[OK] traza: turno 2 usa el cliente del turno 1
+[OK] traza: segundo intento tras ERROR
+[OK] traza: hilo aislado no llama herramientas
+[OK] traza_ejecucion.log
+
+## turno_1_multi_paso (thread_id=conversacion-demo-1)
+Usuario: "¿Cuántos pedidos tuvo Ana García y cuál fue el total?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tuvo 3 pedidos por un total de $14.500."
+
+## turno_2_memoria (thread_id=conversacion-demo-1)
+Usuario: "¿Y el último?"
+→ El agente decide usar la herramienta: buscar_ultimo_pedido(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedido_id": "P-1023", "fecha": "2026-09-28", "monto": 6200, "estado": "entregado"}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "El último pedido de Ana García es P-1023, del 2026-09-28, por $6.200 (entregado)."
+
+## turno_3_memoria_otro_cliente (thread_id=conversacion-demo-1)
+Usuario: "¿Y Juan Pérez?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Juan Pérez')
+→ La herramienta devuelve: {"nombre": "Juan Pérez", "cliente_id": 205}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_ultimo_pedido(cliente_id=205)
+→ La herramienta devuelve: {"cliente_id": 205, "pedido_id": "P-2051", "fecha": "2026-08-14", "monto": 3200, "estado": "entregado"}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "El último pedido de Juan Pérez es P-2051, del 2026-08-14, por $3.200 (entregado)."
+
+## prueba_reintento_nombre_incompleto (thread_id=conversacion-reintento-1)
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tuvo 3 pedidos por un total de $14.500."
+
+## prueba_error_y_aclaracion (thread_id=conversacion-error-1)
+Usuario: "¿Cuántos pedidos tuvo el cliente Roberto Sánchez?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Roberto Sánchez')
+→ La herramienta devuelve: ERROR: no se encontró ningún cliente con el nombre 'Roberto Sánchez'. No inventes datos: pedile al usuario que confirme el nombre completo o el cliente_id.
+→ El agente razona: la herramienta devolvió ERROR → pide una aclaración, no inventa.
+Respuesta: "No encontré a un cliente llamado Roberto Sánchez. ¿Podés confirmar el nombre completo o pasarme el cliente_id?"
+
+## prueba_hilo_aislado (thread_id=conversacion-aislada-1)
+Usuario: "¿Y el último?"
+→ El agente razona: no necesita herramientas o le falta contexto → responde.
+Respuesta: "¿De qué cliente querés ver el último pedido? Pasame el nombre o el cliente_id."
+
+--- conversacion-demo-1: 16 mensajes en C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\checkpoints.sqlite ---
+================================ Human Message =================================
+
+¿Cuántos pedidos tuvo Ana García y cuál fue el total?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_59b968247c30)
+ Call ID: call_59b968247c30
+  Args:
+    nombre: Ana García
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Ana García", "cliente_id": 102}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_pedidos (call_242dce8e617d)
+ Call ID: call_242dce8e617d
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_pedidos
+
+{"cliente_id": 102, "pedidos": 3, "total": 14500}
+================================== Ai Message ==================================
+
+Ana García tuvo 3 pedidos por un total de $14.500.
+================================ Human Message =================================
+
+¿Y el último?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_ultimo_pedido (call_87be94660839)
+ Call ID: call_87be94660839
+  Args:
+    cliente_id: 102
+================================= Tool Message =================================
+Name: buscar_ultimo_pedido
+
+{"cliente_id": 102, "pedido_id": "P-1023", "fecha": "2026-09-28", "monto": 6200, "estado": "entregado"}
+================================== Ai Message ==================================
+
+El último pedido de Ana García es P-1023, del 2026-09-28, por $6.200 (entregado).
+================================ Human Message =================================
+
+¿Y Juan Pérez?
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_cliente_por_nombre (call_9545562d68a6)
+ Call ID: call_9545562d68a6
+  Args:
+    nombre: Juan Pérez
+================================= Tool Message =================================
+Name: buscar_cliente_por_nombre
+
+{"nombre": "Juan Pérez", "cliente_id": 205}
+================================== Ai Message ==================================
+Tool Calls:
+  buscar_ultimo_pedido (call_59c4a471b48c)
+ Call ID: call_59c4a471b48c
+  Args:
+    cliente_id: 205
+================================= Tool Message =================================
+Name: buscar_ultimo_pedido
+
+{"cliente_id": 205, "pedido_id": "P-2051", "fecha": "2026-08-14", "monto": 3200, "estado": "entregado"}
+================================== Ai Message ==================================
+
+El último pedido de Juan Pérez es P-2051, del 2026-08-14, por $3.200 (entregado).
+
+Traza guardada en C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\traza.json y C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\traza.log
+[OK] demo: multi-paso
+[OK] demo: memoria por thread_id
+[OK] demo: segundo intento
+[OK] demo: aclaración sin inventar
+[OK] demo: historial recuperado
+[OK] validacion

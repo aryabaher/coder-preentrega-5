@@ -1,0 +1,2 @@
+$ python main.py   # sin OPENAI_API_KEY
+Error controlado: 401/key: falta OPENAI_API_KEY en las variables de entorno. Copiá .env.example a .env y cargá la clave. No se reintenta.
