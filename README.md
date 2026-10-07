@@ -23,6 +23,34 @@ Respuesta: "El último pedido de Ana García fue el pedido ID P-1023, realizado 
 
 "¿Y el último?" no nombra a ningún cliente. El `102` sale del historial que `AsyncSqliteSaver` recuperó para ese `thread_id`.
 
+## Cómo se cumple cada criterio
+
+### Criterios de aceptación
+
+| Criterio | Cómo se cumple | Evidencia |
+|----------|----------------|-----------|
+| **Autonomía** | El LLM decide solo cuándo llamar a una herramienta: `nodo_modelo` le pasa el historial y `tools_condition` mira si la respuesta trae `tool_calls`. No hay rutas manuales `if/else` en el grafo (`agente.py`). | Turno 1 de `traza_ejecucion.log`: el modelo encadena `buscar_cliente_por_nombre` → `buscar_pedidos` sin que nadie le diga el orden · `test_multi_paso_llama_dos_herramientas_en_orden` |
+| **Ciclo de Retorno** | Si una herramienta devuelve un error o información incompleta, la observación vuelve al modelo por `herramientas -> modelo`. Con "García" (incompleto) hace un segundo intento con "Ana García"; con "Roberto Sánchez" (inexistente) pide aclaraciones. Los argumentos inválidos vuelven como `ToolMessage` de error por `handle_tool_errors=True`. | Turnos `prueba_reintento_nombre_incompleto` y `prueba_error_y_aclaracion` de `traza_ejecucion.log` · `test_nombre_incompleto_hace_segundo_intento` · `test_cliente_inexistente_pide_aclaracion_sin_inventar` · `test_argumento_invalido_vuelve_como_tool_message_de_error` |
+| **Resiliencia de Estado** | Con el mismo `thread_id`, el agente recuerda las interacciones previas de la sesión: `AsyncSqliteSaver` guarda cada paso en `checkpoints.sqlite`. "¿Y el último?" usa el cliente del turno anterior. Otro `thread_id` arranca vacío, y el historial sobrevive a cerrar y reabrir el archivo. | Turnos `turno_2_memoria` y `prueba_hilo_aislado` · `evidencias/05-historial-otro-proceso.txt` · `test_mismo_thread_id_recuerda_el_cliente` · `test_el_historial_sobrevive_a_cerrar_y_reabrir_sqlite` |
+| **Código Limpio** | Python 3.12 (`.python-version`, `requires-python = ">=3.12"`, alias `type`), tipado estático con type hints en todas las funciones (`mypy --strict` sin errores) y gestión asíncrona con `asyncio`: `async def nodo_modelo`, `ainvoke`, `AsyncSqliteSaver` y `asyncio.run(main())`. | `evidencias/03-mypy.txt` · `evidencias/02-pytest.txt` |
+
+### Criterios de evaluación
+
+| Criterio | Cómo se cumple | Dónde |
+|----------|----------------|-------|
+| **Arquitectura del Grafo y Gestión de Estado** | `grafo = StateGraph(MessagesState)`: el estado hereda de `MessagesState`, cuyo reducer `add_messages` acumula el historial y mantiene la coherencia del diálogo. Nodo `modelo` + nodo `herramientas`, arista condicional `tools_condition` y `herramientas -> modelo` para el ciclo. El historial que ve el LLM se recorta con `trim_messages`. | `agente.py` · sección [Arquitectura del grafo](#arquitectura-del-grafo) · `tests/test_grafo.py` |
+| **Integración de Herramientas y Razonamiento Multi-paso** | Tres herramientas `@tool` con docstrings descriptivos y argumentos Pydantic, que simulan consultas a una base de datos. El LLM se vincula con `llm.bind_tools(herramientas)`. La herramienta se invoca 2 veces para "¿Cuántos pedidos tuvo Ana García y cuál fue el total?" y 3 en el reintento, todo con `recursion_limit` 10. | `herramientas.py` · `agente.py` · `traza_ejecucion.json` · sección [Razonamiento multi-paso y ciclo de retorno](#razonamiento-multi-paso-y-ciclo-de-retorno) |
+| **Persistencia con SqliteSaver** | `AsyncSqliteSaver.from_conn_string("checkpoints.sqlite")` (el `SqliteSaver` asíncrono) + `thread_id` en cada invocación. `aget_state` recupera el historial, que `main.py` imprime con `pretty_print()`, y `historial.py` sigue la conversación desde otro proceso. | `agente.py` → `abrir_agente` · `historial.py` · sección [Persistencia con SqliteSaver](#persistencia-con-sqlitesaver) · `tests/test_persistencia.py` |
+| **Calidad del Repositorio y Entorno Profesional** | Módulos separados por responsabilidad, dependencias fijadas en `requirements.txt` (venv), pytest con dobles del LLM sin API real y errores controlados por familia. Las credenciales salen de variables de entorno: `.env.example` vacío, `.env` en `.gitignore` y ninguna clave con valor por defecto. | Secciones [Archivos del repositorio](#archivos-del-repositorio), [Código y entorno](#código-y-entorno) y [Manejo de errores personalizados](#manejo-de-errores-personalizados) |
+
+### Errores comunes a evitar
+
+| Error | Cómo se evita |
+|-------|---------------|
+| **Descripciones Vagas** | Cada docstring dice cuándo usar la herramienta, cuándo no, qué recibe, qué devuelve y qué hacer con cada `ERROR`. Un docstring que no alcanzaba se corrigió: ver [Herramientas](#herramientas). |
+| **Bucles Infinitos** | Cada invocación lleva `"recursion_limit": 10`, con techo de 50 en la validación Pydantic. Al alcanzarlo, `GraphRecursionError` se convierte en `LimiteRecursionError` (`test_recursion_limit_corta_el_bucle`). |
+| **Estado Sucio** | `trim_messages` limita lo que ve el LLM a los últimos `max_mensajes` (default 20), y `main.py` limpia sus `thread_id` con `borrar_hilos` antes de cada corrida. |
+
 ## Quick path
 
 1. Entorno con Python 3.12 y venv. `requirements.txt` trae también `pytest`, `pytest-asyncio` y `mypy`, así que un solo `pip install` alcanza.
@@ -46,9 +74,8 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-2. Cargar `OPENAI_API_KEY` en `.env`. El archivo no se versiona. Para usar Anthropic: `LLM_PROVIDER=anthropic` y `ANTHROPIC_API_KEY`.
-
-3. Chequeo sin API, tests y tipos:
+1. Cargar `OPENAI_API_KEY` en `.env`. El archivo no se versiona. Para usar Anthropic: `LLM_PROVIDER=anthropic` y `ANTHROPIC_API_KEY`.
+2. Chequeo sin API, tests y tipos:
 
 ```
 python validacion.py
@@ -56,7 +83,7 @@ python -m pytest -v
 python -m mypy .
 ```
 
-4. Demo con el LLM real y recuperación del historial desde otro proceso:
+1. Demo con el LLM real y recuperación del historial desde otro proceso:
 
 ```
 python main.py
@@ -68,24 +95,28 @@ python historial.py conversacion-demo-1 "¿En qué estado está ese pedido y cu�
 
 ## Archivos del repositorio
 
-| Artefacto | Dónde está |
-|-----------|------------|
-| `grafo = StateGraph(MessagesState)`, nodos `modelo` y `herramientas`, `tools_condition`, `herramientas -> modelo` | `agente.py` |
-| `async def nodo_modelo`: reintentos 429/red, salida truncada, recorte del historial | `agente.py` |
-| `llm_con_herramientas = llm.bind_tools(herramientas)` | `agente.py` → `obtener_llm_con_herramientas` |
-| `AsyncSqliteSaver.from_conn_string(ruta_db)` y `grafo.compile(checkpointer=checkpointer)` | `agente.py` → `abrir_agente` |
-| `preguntar`: `thread_id`, `recursion_limit` (default 10) y validación Pydantic | `agente.py` |
-| `@tool` `buscar_cliente_por_nombre`, `buscar_pedidos`, `buscar_ultimo_pedido`, y `CLIENTES_DB` / `PEDIDOS_DB` | `herramientas.py` |
-| `crear_llm` (`ChatOpenAI` o `ChatAnthropic`) y `clasificar_error` | `modelo.py` |
-| Familias de error | `errors.py` |
-| `serializar_traza`, `lineas_react`, `guardar_traza` | `traza.py` |
-| Demo: seis turnos en cuatro `thread_id` y el historial recuperado | `main.py` |
-| Historial de un `thread_id` en un proceso nuevo | `historial.py` |
-| Traza ReAct de la demo real | `traza_ejecucion.json` · `traza_ejecucion.log` |
-| Chequeo offline | `validacion.py` |
-| Tests y dobles del LLM | `tests/` |
-| Dependencias fijadas · Python · tipos | `requirements.txt` · `.python-version` / `pyproject.toml` (`requires-python >= 3.12`) · `[tool.mypy] strict = true` |
-| Variables de entorno | `.env.example` (el `.env` real está en `.gitignore`) |
+
+| Artefacto                                                                                                         | Dónde está                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `grafo = StateGraph(MessagesState)`, nodos `modelo` y `herramientas`, `tools_condition`, `herramientas -> modelo` | `agente.py`                                                                                                         |
+| `async def nodo_modelo`: reintentos 429/red, salida truncada, recorte del historial                               | `agente.py`                                                                                                         |
+| `llm_con_herramientas = llm.bind_tools(herramientas)`                                                             | `agente.py` → `obtener_llm_con_herramientas`                                                                        |
+| `AsyncSqliteSaver.from_conn_string(ruta_db)` y `grafo.compile(checkpointer=checkpointer)`                         | `agente.py` → `abrir_agente`                                                                                        |
+| `preguntar`: `thread_id`, `recursion_limit` (default 10) y validación Pydantic                                    | `agente.py`                                                                                                         |
+| `@tool` `buscar_cliente_por_nombre`, `buscar_pedidos`, `buscar_ultimo_pedido`, y `CLIENTES_DB` / `PEDIDOS_DB`     | `herramientas.py`                                                                                                   |
+| `crear_llm` (`ChatOpenAI` o `ChatAnthropic`) y `clasificar_error`                                                 | `modelo.py`                                                                                                         |
+| Familias de error                                                                                                 | `errors.py`                                                                                                         |
+| `serializar_traza`, `lineas_react`, `guardar_traza`                                                               | `traza.py`                                                                                                          |
+| Demo: seis turnos en cuatro `thread_id` y el historial recuperado                                                 | `main.py`                                                                                                           |
+| Historial de un `thread_id` en un proceso nuevo                                                                   | `historial.py`                                                                                                      |
+| Traza ReAct de la demo real                                                                                       | `traza_ejecucion.json` · `traza_ejecucion.log`                                                                      |
+| Chequeo offline                                                                                                   | `validacion.py`                                                                                                     |
+| Tests y dobles del LLM                                                                                            | `tests/`                                                                                                            |
+| Dependencias fijadas · Python · tipos                                                                             | `requirements.txt` · `.python-version` / `pyproject.toml` (`requires-python >= 3.12`) · `[tool.mypy] strict = true` |
+| Variables de entorno                                                                                              | `.env.example` (el `.env` real está en `.gitignore`)                                                                |
+
+
+
 
 ## Arquitectura del grafo
 
@@ -96,6 +127,8 @@ flowchart LR
     modelo -- "tools_condition: no hay tool_calls" --> END
     herramientas --> modelo
 ```
+
+
 
 ```python
 grafo = StateGraph(MessagesState)  # hereda el reducer add_messages: cada nodo suma mensajes al historial
@@ -111,15 +144,19 @@ grafo.add_edge("herramientas", "modelo")
 - **Estado.** `MessagesState` define `messages: Annotated[list[AnyMessage], add_messages]`. `add_messages` cumple el papel de `operator.add` (concatenar) y además deduplica por `id` del mensaje: al retomar un checkpoint, el historial recuperado y el mensaje nuevo no se duplican. Los nodos no mutan el estado; devuelven `{"messages": [respuesta]}` y el reducer lo suma.
 - **Estado sucio.** El checkpoint guarda todo el historial. A cada paso, `recortar_historial` (`trim_messages`) le manda al LLM solo los últimos `max_mensajes` (default 20), empezando en un `HumanMessage` para no dejar un `ToolMessage` sin su `AIMessage`. `preguntar(..., max_mensajes=...)` lo pasa por `configurable` y el valor llega al nodo. Además, `main.py` borra sus cuatro `thread_id` con `borrar_hilos` antes de correr, para que una segunda corrida no apile la demo sobre la anterior.
 
+
+
 ## Herramientas
 
 Las dos tablas están separadas a propósito. El usuario nombra al cliente y los pedidos se buscan por ID, así que para responder hay que encadenar dos herramientas.
 
-| Herramienta | Entrada (Pydantic) | Salida | Cuándo la elige el modelo |
-|-------------|--------------------|--------|---------------------------|
-| `buscar_cliente_por_nombre` | `nombre: str` | `{"nombre", "cliente_id"}` o `ERROR: ...` | El usuario nombra a un cliente, aunque sea solo el apellido |
-| `buscar_pedidos` | `cliente_id: int`, `> 0` | `{"cliente_id", "pedidos", "total"}` o `ERROR: ...` | Cantidad de pedidos o total gastado |
-| `buscar_ultimo_pedido` | `cliente_id: int`, `> 0` | `{"cliente_id", "pedido_id", "fecha", "monto", "estado"}` o `ERROR: ...` | "¿Y el último?", fecha, monto o estado del más reciente |
+
+| Herramienta                 | Entrada (Pydantic)       | Salida                                                                   | Cuándo la elige el modelo                                   |
+| --------------------------- | ------------------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `buscar_cliente_por_nombre` | `nombre: str`            | `{"nombre", "cliente_id"}` o `ERROR: ...`                                | El usuario nombra a un cliente, aunque sea solo el apellido |
+| `buscar_pedidos`            | `cliente_id: int`, `> 0` | `{"cliente_id", "pedidos", "total"}` o `ERROR: ...`                      | Cantidad de pedidos o total gastado                         |
+| `buscar_ultimo_pedido`      | `cliente_id: int`, `> 0` | `{"cliente_id", "pedido_id", "fecha", "monto", "estado"}` o `ERROR: ...` | "¿Y el último?", fecha, monto o estado del más reciente     |
+
 
 Cada docstring dice para qué sirve la herramienta, cuándo no usarla, qué recibe (`Args`), qué devuelve y qué hacer con cada `ERROR`. La observación es siempre `str`: JSON si hay datos, o un texto que empieza con `ERROR:` y dice cómo seguir.
 
@@ -129,18 +166,20 @@ Cada docstring dice para qué sirve la herramienta, cuándo no usarla, qué reci
 
 Seis turnos de `main.py`, con el LLM real (`evidencias/04-main-openai.txt`):
 
-| Turno (`thread_id`) | Pregunta | Herramientas que eligió el modelo | Qué muestra |
-|---------------------|----------|-----------------------------------|-------------|
-| `turno_1_multi_paso` (`conversacion-demo-1`) | ¿Cuántos pedidos tuvo Ana García y cuál fue el total? | `buscar_cliente_por_nombre` → `buscar_pedidos` | Dos herramientas encadenadas para una pregunta |
-| `turno_2_memoria` (`conversacion-demo-1`) | ¿Y el último? | `buscar_ultimo_pedido(cliente_id=102)` | El ID sale del turno anterior |
-| `turno_3_memoria_otro_cliente` (`conversacion-demo-1`) | ¿Y Juan Pérez? | `buscar_cliente_por_nombre` → `buscar_pedidos` | Hereda la intención y cambia de cliente |
-| `prueba_reintento_nombre_incompleto` (`conversacion-reintento-1`) | ¿Cuántos pedidos tiene García? | `buscar_cliente_por_nombre('García')` → ERROR → `buscar_cliente_por_nombre('Ana García')` → `buscar_pedidos` | Segundo intento después de un ERROR |
-| `prueba_error_y_aclaracion` (`conversacion-error-1`) | ¿Cuántos pedidos tuvo el cliente Roberto Sánchez? | `buscar_cliente_por_nombre` → ERROR | Pide confirmar el nombre y no inventa datos |
-| `prueba_hilo_aislado` (`conversacion-aislada-1`) | ¿Y el último? | ninguna | Otro `thread_id` no ve a Ana García y pide el cliente |
+
+| Turno (`thread_id`)                                               | Pregunta                                              | Herramientas que eligió el modelo                                                                            | Qué muestra                                           |
+| ----------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `turno_1_multi_paso` (`conversacion-demo-1`)                      | ¿Cuántos pedidos tuvo Ana García y cuál fue el total? | `buscar_cliente_por_nombre` → `buscar_pedidos`                                                               | Dos herramientas encadenadas para una pregunta        |
+| `turno_2_memoria` (`conversacion-demo-1`)                         | ¿Y el último?                                         | `buscar_ultimo_pedido(cliente_id=102)`                                                                       | El ID sale del turno anterior                         |
+| `turno_3_memoria_otro_cliente` (`conversacion-demo-1`)            | ¿Y Juan Pérez?                                        | `buscar_cliente_por_nombre` → `buscar_pedidos`                                                               | Hereda la intención y cambia de cliente               |
+| `prueba_reintento_nombre_incompleto` (`conversacion-reintento-1`) | ¿Cuántos pedidos tiene García?                        | `buscar_cliente_por_nombre('García')` → ERROR → `buscar_cliente_por_nombre('Ana García')` → `buscar_pedidos` | Segundo intento después de un ERROR                   |
+| `prueba_error_y_aclaracion` (`conversacion-error-1`)              | ¿Cuántos pedidos tuvo el cliente Roberto Sánchez?     | `buscar_cliente_por_nombre` → ERROR                                                                          | Pide confirmar el nombre y no inventa datos           |
+| `prueba_hilo_aislado` (`conversacion-aislada-1`)                  | ¿Y el último?                                         | ninguna                                                                                                      | Otro `thread_id` no ve a Ana García y pide el cliente |
+
 
 Un argumento que no pasa Pydantic (por ejemplo `cliente_id=0`) no rompe el grafo. `ToolNode(..., handle_tool_errors=True)` lo devuelve al modelo como `ToolMessage` con `status="error"`, y el modelo pide una aclaración.
 
-**`recursion_limit`.** Cada invocación lleva `"recursion_limit": 10` (`RECURSION_LIMIT`). Una pregunta con dos herramientas usa 5 pasos (`modelo`, `herramientas`, `modelo`, `herramientas`, `modelo`) y el reintento de "García" usa 7. Si el modelo entra en bucle, el grafo corta en 10 pasos con `LimiteRecursionError`. `preguntar(..., recursion_limit=n)` acepta hasta 50 y ese valor llega a LangGraph.
+`recursion_limit`**.** Cada invocación lleva `"recursion_limit": 10` (`RECURSION_LIMIT`). Una pregunta con dos herramientas usa 5 pasos (`modelo`, `herramientas`, `modelo`, `herramientas`, `modelo`) y el reintento de "García" usa 7. Si el modelo entra en bucle, el grafo corta en 10 pasos con `LimiteRecursionError`. `preguntar(..., recursion_limit=n)` acepta hasta 50 y ese valor llega a LangGraph.
 
 Tests: `test_multi_paso_llama_dos_herramientas_en_orden` · `test_id_directo_usa_una_sola_herramienta` · `test_nombre_incompleto_hace_segundo_intento` · `test_cliente_inexistente_pide_aclaracion_sin_inventar` · `test_argumento_invalido_vuelve_como_tool_message_de_error` · `test_recursion_limit_corta_el_bucle` · `test_recursion_limit_de_la_llamada_llega_al_grafo`
 
@@ -148,8 +187,8 @@ Tests: `test_multi_paso_llama_dos_herramientas_en_orden` · `test_id_directo_usa
 
 `abrir_agente` abre un `AsyncSqliteSaver` (la versión asíncrona de `SqliteSaver`, del paquete `langgraph-checkpoint-sqlite`). Lo hace con `from_conn_string("checkpoints.sqlite")`, corre `setup()` y compila el grafo con ese checkpointer. LangGraph guarda un checkpoint después de cada paso. Cada `ainvoke` con `{"configurable": {"thread_id": ...}}` arranca del último checkpoint de ese hilo.
 
-- **Mismo `thread_id`.** Los turnos 2 y 3 se apoyan en el turno 1. `aget_state` devuelve los 16 mensajes de `conversacion-demo-1`, y `main.py` los imprime con `pretty_print()`.
-- **Otro `thread_id`.** `conversacion-aislada-1` empieza vacío.
+- **Mismo** `thread_id`**.** Los turnos 2 y 3 se apoyan en el turno 1. `aget_state` devuelve los 16 mensajes de `conversacion-demo-1`, y `main.py` los imprime con `pretty_print()`.
+- **Otro** `thread_id`**.** `conversacion-aislada-1` empieza vacío.
 - **Otro proceso.** `historial.py` reabre el archivo, recupera los 16 mensajes y sigue la conversación. Ante "¿En qué estado está ese pedido y cuánto salió?" llamó a `buscar_ultimo_pedido(cliente_id=205)`, porque el último cliente del hilo era Juan Pérez (`evidencias/05-historial-otro-proceso.txt`).
 
 Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuerda_el_cliente` · `test_seguimiento_con_otro_cliente_conserva_la_intencion` · `test_otro_thread_id_no_ve_el_historial` · `test_el_historial_sobrevive_a_cerrar_y_reabrir_sqlite` · `test_borrar_hilos_deja_el_thread_vacio` · `test_historial_recupera_el_thread_en_otra_apertura`
@@ -162,6 +201,8 @@ Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuer
 - **Credenciales.** Las claves solo salen del entorno o de `.env` (cargado con `python-dotenv`), y ninguna tiene valor por defecto. `.env` y `*.sqlite` están en `.gitignore`. El LLM se crea en la primera llamada y no al importar: si falta la clave, sale el `401/key` de abajo y no un error del SDK.
 - **Una sola definición.** El grafo se arma una vez en `agente.py`. `main.py` y `historial.py` lo abren con `abrir_agente` y no lo vuelven a armar.
 
+
+
 ## Tests sin API
 
 `tests/conftest.py` reemplaza `agente.obtener_llm_con_herramientas` por `ModeloPedidosLocal` (`tests/modelo_local.py`). Es un doble que lee el historial que le pasa el grafo y devuelve `AIMessage` con `tool_calls`, como lo haría el LLM. Las herramientas, el `ToolNode`, `tools_condition` y `AsyncSqliteSaver` (sobre un archivo temporal) son los reales. Las excepciones de los tests de error son las clases reales del SDK de OpenAI (`AuthenticationError`, `RateLimitError`, `APITimeoutError`, `APIConnectionError`). Ningún test usa la red.
@@ -170,6 +211,8 @@ Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuer
 python -m pytest -v
 ============================= 74 passed in 6.67s ==============================
 ```
+
+
 
 ## Manejo de errores personalizados
 
@@ -270,16 +313,20 @@ No son excepciones. La herramienta devuelve un texto con `ERROR:` y le dice al m
 
 ## Evidencias
 
-| Archivo | Qué muestra |
-|---------|-------------|
-| `traza_ejecucion.json` | Traza de la demo real: por turno, `thread_id`, herramientas invocadas, respuesta, líneas ReAct y cada mensaje (`tipo`, `contenido`, `tool_calls`, `herramienta`). |
-| `traza_ejecucion.log` | El mismo recorrido en texto, con el formato `Usuario` / `→ El agente decide usar la herramienta` / `Respuesta`. |
-| `evidencias/01-validacion-offline.txt` | `python validacion.py`: artefactos, traza real y la demo con el doble. |
-| `evidencias/02-pytest.txt` | `python -m pytest -v`: 74 tests. |
-| `evidencias/03-mypy.txt` | `python -m mypy .` en modo strict. |
-| `evidencias/04-main-openai.txt` | `python main.py` contra `gpt-4o-mini`, con el historial recuperado con `aget_state` + `pretty_print()`. |
-| `evidencias/05-historial-otro-proceso.txt` | `python historial.py conversacion-demo-1 "..."`: proceso nuevo, 16 mensajes recuperados de SQLite y un turno más con ese contexto. |
-| `evidencias/06-error-401-sin-clave.txt` | `python main.py` sin clave: `Error controlado: 401/key ...` y código de salida 1. |
+
+| Archivo                                    | Qué muestra                                                                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `traza_ejecucion.json`                     | Traza de la demo real: por turno, `thread_id`, herramientas invocadas, respuesta, líneas ReAct y cada mensaje (`tipo`, `contenido`, `tool_calls`, `herramienta`). |
+| `traza_ejecucion.log`                      | El mismo recorrido en texto, con el formato `Usuario` / `→ El agente decide usar la herramienta` / `Respuesta`.                                                   |
+| `evidencias/01-validacion-offline.txt`     | `python validacion.py`: artefactos, traza real y la demo con el doble.                                                                                            |
+| `evidencias/02-pytest.txt`                 | `python -m pytest -v`: 74 tests.                                                                                                                                  |
+| `evidencias/03-mypy.txt`                   | `python -m mypy .` en modo strict.                                                                                                                                |
+| `evidencias/04-main-openai.txt`            | `python main.py` contra `gpt-4o-mini`, con el historial recuperado con `aget_state` + `pretty_print()`.                                                           |
+| `evidencias/05-historial-otro-proceso.txt` | `python historial.py conversacion-demo-1 "..."`: proceso nuevo, 16 mensajes recuperados de SQLite y un turno más con ese contexto.                                |
+| `evidencias/06-error-401-sin-clave.txt`    | `python main.py` sin clave: `Error controlado: 401/key ...` y código de salida 1.                                                                                 |
+
+
+
 
 ## Checklist
 
