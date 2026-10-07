@@ -74,8 +74,9 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-1. Cargar `OPENAI_API_KEY` en `.env`. El archivo no se versiona. Para usar Anthropic: `LLM_PROVIDER=anthropic` y `ANTHROPIC_API_KEY`.
-2. Chequeo sin API, tests y tipos:
+2. Cargar `OPENAI_API_KEY` en `.env`. El archivo no se versiona. Para usar Anthropic: `LLM_PROVIDER=anthropic` y `ANTHROPIC_API_KEY`.
+
+3. Chequeo sin API, tests y tipos:
 
 ```
 python validacion.py
@@ -83,7 +84,7 @@ python -m pytest -v
 python -m mypy .
 ```
 
-1. Demo con el LLM real y recuperación del historial desde otro proceso:
+4. Demo con el LLM real y recuperación del historial desde otro proceso:
 
 ```
 python main.py
@@ -179,7 +180,7 @@ Seis turnos de `main.py`, con el LLM real (`evidencias/04-main-openai.txt`):
 
 Un argumento que no pasa Pydantic (por ejemplo `cliente_id=0`) no rompe el grafo. `ToolNode(..., handle_tool_errors=True)` lo devuelve al modelo como `ToolMessage` con `status="error"`, y el modelo pide una aclaración.
 
-`recursion_limit`**.** Cada invocación lleva `"recursion_limit": 10` (`RECURSION_LIMIT`). Una pregunta con dos herramientas usa 5 pasos (`modelo`, `herramientas`, `modelo`, `herramientas`, `modelo`) y el reintento de "García" usa 7. Si el modelo entra en bucle, el grafo corta en 10 pasos con `LimiteRecursionError`. `preguntar(..., recursion_limit=n)` acepta hasta 50 y ese valor llega a LangGraph.
+**`recursion_limit`.** Cada invocación lleva `"recursion_limit": 10` (`RECURSION_LIMIT`). Una pregunta con dos herramientas usa 5 pasos (`modelo`, `herramientas`, `modelo`, `herramientas`, `modelo`) y el reintento de "García" usa 7. Si el modelo entra en bucle, el grafo corta en 10 pasos con `LimiteRecursionError`. `preguntar(..., recursion_limit=n)` acepta hasta 50 y ese valor llega a LangGraph.
 
 Tests: `test_multi_paso_llama_dos_herramientas_en_orden` · `test_id_directo_usa_una_sola_herramienta` · `test_nombre_incompleto_hace_segundo_intento` · `test_cliente_inexistente_pide_aclaracion_sin_inventar` · `test_argumento_invalido_vuelve_como_tool_message_de_error` · `test_recursion_limit_corta_el_bucle` · `test_recursion_limit_de_la_llamada_llega_al_grafo`
 
@@ -187,8 +188,8 @@ Tests: `test_multi_paso_llama_dos_herramientas_en_orden` · `test_id_directo_usa
 
 `abrir_agente` abre un `AsyncSqliteSaver` (la versión asíncrona de `SqliteSaver`, del paquete `langgraph-checkpoint-sqlite`). Lo hace con `from_conn_string("checkpoints.sqlite")`, corre `setup()` y compila el grafo con ese checkpointer. LangGraph guarda un checkpoint después de cada paso. Cada `ainvoke` con `{"configurable": {"thread_id": ...}}` arranca del último checkpoint de ese hilo.
 
-- **Mismo** `thread_id`**.** Los turnos 2 y 3 se apoyan en el turno 1. `aget_state` devuelve los 16 mensajes de `conversacion-demo-1`, y `main.py` los imprime con `pretty_print()`.
-- **Otro** `thread_id`**.** `conversacion-aislada-1` empieza vacío.
+- **Mismo `thread_id`.** Los turnos 2 y 3 se apoyan en el turno 1. `aget_state` devuelve los 16 mensajes de `conversacion-demo-1`, y `main.py` los imprime con `pretty_print()`.
+- **Otro `thread_id`.** `conversacion-aislada-1` empieza vacío.
 - **Otro proceso.** `historial.py` reabre el archivo, recupera los 16 mensajes y sigue la conversación. Ante "¿En qué estado está ese pedido y cuánto salió?" llamó a `buscar_ultimo_pedido(cliente_id=205)`, porque el último cliente del hilo era Juan Pérez (`evidencias/05-historial-otro-proceso.txt`).
 
 Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuerda_el_cliente` · `test_seguimiento_con_otro_cliente_conserva_la_intencion` · `test_otro_thread_id_no_ve_el_historial` · `test_el_historial_sobrevive_a_cerrar_y_reabrir_sqlite` · `test_borrar_hilos_deja_el_thread_vacio` · `test_historial_recupera_el_thread_en_otra_apertura`
