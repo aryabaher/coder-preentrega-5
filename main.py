@@ -1,5 +1,9 @@
 """Demo del agente: razonamiento multi-paso, memoria por thread_id y ciclo de retorno ante errores."""
 
+from requisitos import exigir_python_312
+
+exigir_python_312()
+
 import asyncio
 import sys
 from pathlib import Path

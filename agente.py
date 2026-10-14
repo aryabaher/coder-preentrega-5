@@ -7,7 +7,7 @@ from functools import cache
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, trim_messages
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, trim_messages
 from langchain_core.runnables import Runnable, RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -135,6 +135,14 @@ async def preguntar(
             {"messages": [HumanMessage(content=consulta.mensaje)]}, config=config
         )
     except GraphRecursionError as exc:
+        estado = await app.aget_state(config)
+        mensajes = estado.values.get("messages", [])
+        ultimo = mensajes[-1] if mensajes else None
+        if not estado.next and isinstance(ultimo, AIMessage) and not ultimo.tool_calls:
+            # LangGraph también cuenta la vuelta que descubre que no queda nada por hacer:
+            # si el corte cae ahí, la respuesta final ya está en el checkpoint.
+            return dict(estado.values)
+        await _cerrar_llamadas_pendientes(app, config, ultimo)
         raise LimiteRecursionError(
             f"recursion_limit: el agente llegó a {consulta.recursion_limit} pasos sin una respuesta final. "
             "Se cortó para no seguir gastando llamadas: reformulá la pregunta o revisá los docstrings de las herramientas."
@@ -196,6 +204,30 @@ def recortar_historial(mensajes: Sequence[BaseMessage], max_mensajes: int = MAX_
         if isinstance(mensajes[indice], HumanMessage):
             return list(mensajes[indice:])
     return list(mensajes)
+
+
+async def _cerrar_llamadas_pendientes(
+    app: AppAgente, config: RunnableConfig, ultimo: BaseMessage | None
+) -> int:
+    """Responde con ERROR las tool_calls que quedaron sin ejecutar al cortar por recursion_limit.
+
+    Si el corte cae justo después del nodo modelo, el checkpoint termina en un AIMessage
+    con tool_calls sin su ToolMessage, y el proveedor rechaza ese historial en el turno
+    siguiente. Cerrarlas deja el thread usable. Devuelve cuántas llamadas cerró.
+    """
+    if not isinstance(ultimo, AIMessage) or not ultimo.tool_calls:
+        return 0
+    cierres = [
+        ToolMessage(
+            content="ERROR: no se ejecutó porque el turno se cortó por recursion_limit.",
+            tool_call_id=llamada["id"],
+            name=llamada["name"],
+            status="error",
+        )
+        for llamada in ultimo.tool_calls
+    ]
+    await app.aupdate_state(config, {"messages": cierres}, as_node="herramientas")
+    return len(cierres)
 
 
 def _truncada(respuesta: BaseMessage) -> bool:

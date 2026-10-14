@@ -1,8 +1,13 @@
 """Chequeo offline: artefactos de la consigna, traza real incluida y demo con el doble del LLM (sin API)."""
 
+from requisitos import exigir_python_312
+
+exigir_python_312()
+
 import asyncio
 import io
 import json
+import subprocess
 import sys
 import tempfile
 from contextlib import redirect_stdout
@@ -52,7 +57,11 @@ CADENAS: dict[str, list[str]] = {
         "mensaje.pretty_print()",
         "asyncio.run(main())",
         "load_dotenv(",
+        "exigir_python_312()",
     ],
+    "requisitos.py": ["VERSION_MINIMA = (3, 12)", "Python 3.12+ requerido"],
+    "experimento_recursion.py": ["LIMITES = (5, 7, 10)", "recursion_limit=limite", "except LimiteRecursionError"],
+    "README.md": ["Python 3.12 o superior", "py -3.12 -m venv .venv", "## Experimento con recursion_limit"],
 }
 
 
@@ -68,13 +77,19 @@ def chequear_repo() -> None:
         fuente = (RAIZ / archivo).read_text(encoding="utf-8")
         for cadena in cadenas:
             _ok(f"{archivo}: {cadena}", cadena in fuente)
-    _ok("un solo StateGraph", sum((RAIZ / f).read_text(encoding="utf-8").count("StateGraph(") for f in CADENAS) == 1)
-    for archivo in [*CADENAS, "historial.py", ".env.example"]:
+    codigo = [f for f in CADENAS if f.endswith(".py")]
+    _ok("un solo StateGraph", sum((RAIZ / f).read_text(encoding="utf-8").count("StateGraph(") for f in codigo) == 1)
+    for archivo in [*codigo, "historial.py", ".env.example"]:
         _ok(f"{archivo} sin claves", "sk-" not in (RAIZ / archivo).read_text(encoding="utf-8"))
     vacias = [l for l in (RAIZ / ".env.example").read_text(encoding="utf-8").splitlines() if l.endswith("_API_KEY=")]
     _ok(".env.example con las claves vacías", len(vacias) == 2)
     ignorados = (RAIZ / ".gitignore").read_text(encoding="utf-8").splitlines()
     _ok(".gitignore excluye .env y la base SQLite", ".env" in ignorados and "*.sqlite" in ignorados)
+    git = subprocess.run(["git", "ls-files"], cwd=RAIZ, capture_output=True, text=True, encoding="utf-8")
+    if git.returncode == 0:
+        versionados = git.stdout.splitlines()
+        prohibidos = [f for f in versionados if Path(f).name == ".env" or f.endswith((".sqlite", ".sqlite-wal", ".sqlite-shm"))]
+        _ok("git ls-files sin .env ni SQLite", not prohibidos, ", ".join(prohibidos) or f"{len(versionados)} archivos versionados")
 
 
 def chequear_traza_real() -> None:

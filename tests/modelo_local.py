@@ -23,6 +23,13 @@ def pesos(monto: int) -> str:
     return f"${monto:,}".replace(",", ".")
 
 
+def _inicio_del_turno(mensajes: Sequence[BaseMessage]) -> int:
+    for indice in range(len(mensajes) - 1, -1, -1):
+        if isinstance(mensajes[indice], HumanMessage):
+            return indice
+    return 0
+
+
 def _ultimo_humano(mensajes: Sequence[BaseMessage]) -> str:
     for mensaje in reversed(mensajes):
         if isinstance(mensaje, HumanMessage):
@@ -105,7 +112,8 @@ class ModeloPedidosLocal:
             return AIMessage(content="No pude hacer la consulta con esos datos. ¿Me confirmás el cliente?")
         if texto.startswith("ERROR"):
             coincide = re.search(r"Coincide con: ([^.,]+)\.", texto)
-            ya_reintento = sum(isinstance(m, ToolMessage) and str(m.content).startswith("ERROR") for m in mensajes) > 1
+            turno = mensajes[_inicio_del_turno(mensajes):]
+            ya_reintento = sum(isinstance(m, ToolMessage) and str(m.content).startswith("ERROR") for m in turno) > 1
             if coincide and not ya_reintento:
                 return llamada("buscar_cliente_por_nombre", nombre=coincide.group(1).strip())
             nombre = re.search(r"'([^']+)'", texto)

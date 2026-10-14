@@ -58,8 +58,8 @@ Respuesta: "Por favor, indícame el nombre completo del cliente para poder busca
 ¿Cuántos pedidos tuvo Ana García y cuál fue el total?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_cliente_por_nombre (call_b4ICANhDHpnHSovlIq3rTYyn)
- Call ID: call_b4ICANhDHpnHSovlIq3rTYyn
+  buscar_cliente_por_nombre (call_it7Dh3hlP9unuzaIXuoa0Hin)
+ Call ID: call_it7Dh3hlP9unuzaIXuoa0Hin
   Args:
     nombre: Ana García
 ================================= Tool Message =================================
@@ -68,8 +68,8 @@ Name: buscar_cliente_por_nombre
 {"nombre": "Ana García", "cliente_id": 102}
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_pedidos (call_vdwlCLdDLkrfd1imgfaTAJfT)
- Call ID: call_vdwlCLdDLkrfd1imgfaTAJfT
+  buscar_pedidos (call_d8K1g0tqWLnuDIqQdgv6PDRy)
+ Call ID: call_d8K1g0tqWLnuDIqQdgv6PDRy
   Args:
     cliente_id: 102
 ================================= Tool Message =================================
@@ -84,8 +84,8 @@ Ana García tuvo un total de 3 pedidos y el monto total gastado es de $14.500.
 ¿Y el último?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_ultimo_pedido (call_Jg6OO616uh27WJ0HqiIuUljF)
- Call ID: call_Jg6OO616uh27WJ0HqiIuUljF
+  buscar_ultimo_pedido (call_gGrG78GA95PcGDQkDvgVC3jA)
+ Call ID: call_gGrG78GA95PcGDQkDvgVC3jA
   Args:
     cliente_id: 102
 ================================= Tool Message =================================
@@ -100,8 +100,8 @@ El último pedido de Ana García fue el pedido ID P-1023, realizado el 28 de sep
 ¿Y Juan Pérez?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_cliente_por_nombre (call_vTlPebVbJMH09jlFev1PbCBm)
- Call ID: call_vTlPebVbJMH09jlFev1PbCBm
+  buscar_cliente_por_nombre (call_u6kHGA0M0wuaDeWPjMCVdb3r)
+ Call ID: call_u6kHGA0M0wuaDeWPjMCVdb3r
   Args:
     nombre: Juan Pérez
 ================================= Tool Message =================================
@@ -110,8 +110,8 @@ Name: buscar_cliente_por_nombre
 {"nombre": "Juan Pérez", "cliente_id": 205}
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_pedidos (call_CFePzjoDSY2c5F9MXeQQMLUh)
- Call ID: call_CFePzjoDSY2c5F9MXeQQMLUh
+  buscar_pedidos (call_uHNYJvFDlN7QAtn6MLyHDv1f)
+ Call ID: call_uHNYJvFDlN7QAtn6MLyHDv1f
   Args:
     cliente_id: 205
 ================================= Tool Message =================================

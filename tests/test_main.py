@@ -50,7 +50,14 @@ async def test_historial_recupera_el_thread_en_otra_apertura(tmp_path: Path, cap
 
 
 def test_main_sin_clave_sale_con_401(tmp_path: Path) -> None:
-    entorno = {"PATH": "", "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""), "PYTHONIOENCODING": "utf-8"}
+    # Vacía y no ausente: load_dotenv no pisa variables ya definidas, así un .env local no le da clave.
+    entorno = {
+        "PATH": "",
+        "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""),
+        "PYTHONIOENCODING": "utf-8",
+        "OPENAI_API_KEY": "",
+        "LLM_PROVIDER": "",
+    }
     proceso = subprocess.run(
         [sys.executable, str(RAIZ / "main.py")],
         cwd=tmp_path,

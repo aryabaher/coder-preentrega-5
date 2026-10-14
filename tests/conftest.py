@@ -1,3 +1,7 @@
+from requisitos import exigir_python_312
+
+exigir_python_312()
+
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 

@@ -32,7 +32,7 @@ Respuesta: "El último pedido de Ana García fue el pedido ID P-1023, realizado 
 | **Autonomía** | El LLM decide solo cuándo llamar a una herramienta: `nodo_modelo` le pasa el historial y `tools_condition` mira si la respuesta trae `tool_calls`. No hay rutas manuales `if/else` en el grafo (`agente.py`). | Turno 1 de `traza_ejecucion.log`: el modelo encadena `buscar_cliente_por_nombre` → `buscar_pedidos` sin que nadie le diga el orden · `test_multi_paso_llama_dos_herramientas_en_orden` |
 | **Ciclo de Retorno** | Si una herramienta devuelve un error o información incompleta, la observación vuelve al modelo por `herramientas -> modelo`. Con "García" (incompleto) hace un segundo intento con "Ana García"; con "Roberto Sánchez" (inexistente) pide aclaraciones. Los argumentos inválidos vuelven como `ToolMessage` de error por `handle_tool_errors=True`. | Turnos `prueba_reintento_nombre_incompleto` y `prueba_error_y_aclaracion` de `traza_ejecucion.log` · `test_nombre_incompleto_hace_segundo_intento` · `test_cliente_inexistente_pide_aclaracion_sin_inventar` · `test_argumento_invalido_vuelve_como_tool_message_de_error` |
 | **Resiliencia de Estado** | Con el mismo `thread_id`, el agente recuerda las interacciones previas de la sesión: `AsyncSqliteSaver` guarda cada paso en `checkpoints.sqlite`. "¿Y el último?" usa el cliente del turno anterior. Otro `thread_id` arranca vacío, y el historial sobrevive a cerrar y reabrir el archivo. | Turnos `turno_2_memoria` y `prueba_hilo_aislado` · `evidencias/05-historial-otro-proceso.txt` · `test_mismo_thread_id_recuerda_el_cliente` · `test_el_historial_sobrevive_a_cerrar_y_reabrir_sqlite` |
-| **Código Limpio** | Python 3.12 (`.python-version`, `requires-python = ">=3.12"`, alias `type`), tipado estático con type hints en todas las funciones (`mypy --strict` sin errores) y gestión asíncrona con `asyncio`: `async def nodo_modelo`, `ainvoke`, `AsyncSqliteSaver` y `asyncio.run(main())`. | `evidencias/03-mypy.txt` · `evidencias/02-pytest.txt` |
+| **Código Limpio** | Python 3.12 o superior (`.python-version`, `requires-python = ">=3.12"`, alias `type`, `exigir_python_312()` en los puntos de entrada), tipado estático con type hints en todas las funciones (`mypy --strict` sin errores) y gestión asíncrona con `asyncio`: `async def nodo_modelo`, `ainvoke`, `AsyncSqliteSaver` y `asyncio.run(main())`. | `evidencias/03-mypy.txt` · `evidencias/02-pytest.txt` |
 
 ### Criterios de evaluación
 
@@ -48,12 +48,14 @@ Respuesta: "El último pedido de Ana García fue el pedido ID P-1023, realizado 
 | Error | Cómo se evita |
 |-------|---------------|
 | **Descripciones Vagas** | Cada docstring dice cuándo usar la herramienta, cuándo no, qué recibe, qué devuelve y qué hacer con cada `ERROR`. Un docstring que no alcanzaba se corrigió: ver [Herramientas](#herramientas). |
-| **Bucles Infinitos** | Cada invocación lleva `"recursion_limit": 10`, con techo de 50 en la validación Pydantic. Al alcanzarlo, `GraphRecursionError` se convierte en `LimiteRecursionError` (`test_recursion_limit_corta_el_bucle`). |
-| **Estado Sucio** | `trim_messages` limita lo que ve el LLM a los últimos `max_mensajes` (default 20), y `main.py` limpia sus `thread_id` con `borrar_hilos` antes de cada corrida. |
+| **Bucles Infinitos** | Cada invocación lleva `"recursion_limit": 10`, con techo de 50 en la validación Pydantic. Al alcanzarlo, `GraphRecursionError` se convierte en `LimiteRecursionError` (`test_recursion_limit_corta_el_bucle`). `experimento_recursion.py` muestra el corte con 5 en el caso "García" (ver [Experimento con recursion_limit](#experimento-con-recursion_limit)). |
+| **Estado Sucio** | `trim_messages` limita lo que ve el LLM a los últimos `max_mensajes` (default 20), y `main.py` limpia sus `thread_id` con `borrar_hilos` antes de cada corrida. Un corte por `recursion_limit` no deja `tool_calls` sin respuesta en el checkpoint. |
 
 ## Quick path
 
-1. Entorno con Python 3.12 y venv. `requirements.txt` trae también `pytest`, `pytest-asyncio` y `mypy`, así que un solo `pip install` alcanza.
+> **Requisito: Python 3.12 o superior.** `agente.py` declara `type AppAgente = CompiledStateGraph[...]`, el alias `type` de PEP 695, que no existe antes de 3.12: con 3.11 el import falla con `SyntaxError`. Para que el error sea claro, `main.py`, `historial.py`, `experimento_recursion.py`, `validacion.py` y `tests/conftest.py` llaman a `exigir_python_312()` (`requisitos.py`) antes de importar el agente. Comprobá la versión con `py -3.12 --version` (Windows) o `python3.12 --version` (Linux/macOS).
+
+1. Crear el venv con Python 3.12 (`py -3.12 -m venv .venv` / `python3.12 -m venv .venv`). `requirements.txt` trae también `pytest`, `pytest-asyncio` y `mypy`, así que un solo `pip install` alcanza.
 
 **Windows (PowerShell):**
 
@@ -92,7 +94,13 @@ python historial.py conversacion-demo-1
 python historial.py conversacion-demo-1 "¿En qué estado está ese pedido y cuánto salió?"
 ```
 
-`main.py` escribe `traza_ejecucion.json` y `traza_ejecucion.log`. `historial.py` abre `checkpoints.sqlite` en un proceso nuevo, imprime el `thread_id` con `pretty_print()` y, si recibe una pregunta, la responde con ese contexto.
+5. El caso "García" con `recursion_limit` 5, 7 y 10 (ver [Experimento con recursion_limit](#experimento-con-recursion_limit)):
+
+```
+python experimento_recursion.py
+```
+
+`main.py` reescribe `traza_ejecucion.json` y `traza_ejecucion.log` en cada corrida. `historial.py` abre `checkpoints.sqlite` en un proceso nuevo, imprime el `thread_id` con `pretty_print()` y, si recibe una pregunta, la responde con ese contexto.
 
 ## Archivos del repositorio
 
@@ -111,6 +119,8 @@ python historial.py conversacion-demo-1 "¿En qué estado está ese pedido y cu�
 | Demo: seis turnos en cuatro `thread_id` y el historial recuperado                                                 | `main.py`                                                                                                           |
 | Historial de un `thread_id` en un proceso nuevo                                                                   | `historial.py`                                                                                                      |
 | Traza ReAct de la demo real                                                                                       | `traza_ejecucion.json` · `traza_ejecucion.log`                                                                      |
+| `exigir_python_312()`: corta con un mensaje claro si la versión es menor a 3.12                                   | `requisitos.py`                                                                                                     |
+| El caso "García" con `recursion_limit` 5, 7 y 10                                                                  | `experimento_recursion.py`                                                                                          |
 | Chequeo offline                                                                                                   | `validacion.py`                                                                                                     |
 | Tests y dobles del LLM                                                                                            | `tests/`                                                                                                            |
 | Dependencias fijadas · Python · tipos                                                                             | `requirements.txt` · `.python-version` / `pyproject.toml` (`requires-python >= 3.12`) · `[tool.mypy] strict = true` |
@@ -184,6 +194,25 @@ Un argumento que no pasa Pydantic (por ejemplo `cliente_id=0`) no rompe el grafo
 
 Tests: `test_multi_paso_llama_dos_herramientas_en_orden` · `test_id_directo_usa_una_sola_herramienta` · `test_nombre_incompleto_hace_segundo_intento` · `test_cliente_inexistente_pide_aclaracion_sin_inventar` · `test_argumento_invalido_vuelve_como_tool_message_de_error` · `test_recursion_limit_corta_el_bucle` · `test_recursion_limit_de_la_llamada_llega_al_grafo`
 
+## Experimento con recursion_limit
+
+`python experimento_recursion.py` hace la pregunta "¿Cuántos pedidos tiene García?" con `recursion_limit` 5, 7 y 10, cada una en un `thread_id` nuevo (`experimento-recursion-<n>`). Salida real con `gpt-4o-mini`: `evidencias/07-experimento-recursion-limit.txt`.
+
+| `recursion_limit` | Qué pasó | Llamadas al modelo |
+| ----------------- | -------- | ------------------ |
+| 5 | Corta con `LimiteRecursionError` después del segundo intento con "Ana García". La llamada a `buscar_pedidos(cliente_id=102)` ya estaba pedida y no se ejecutó | 3 |
+| 7 | Responde "Ana García tiene un total de 3 pedidos…" | 4 |
+| 10 | Responde, con 3 pasos de margen para un reintento más | 4 |
+
+Qué muestra:
+
+- **El límite corta en el medio del razonamiento.** Con 5, el agente ya había resuelto el `cliente_id` pero no llegó a consultar los pedidos. El error controlado le dice al usuario que reformule. No queda una respuesta inventada.
+- **Cómo cuenta LangGraph.** Después del último nodo, LangGraph da una vuelta más para comprobar que no queda nada por hacer, y esa vuelta también cuenta para el límite: un turno de N nodos termina sin error con `recursion_limit` ≥ N+1. Con el límite exactamente en N (7 para "García", 5 para Ana García), la respuesta final ya está en el checkpoint (`aget_state(...).next == ()`) y LangGraph lanza `GraphRecursionError` igual. En ese caso, `preguntar` devuelve la respuesta guardada en lugar del error.
+- **El thread sigue usable después del corte.** Si el corte cae justo después del nodo `modelo`, el checkpoint queda con un `AIMessage` cuyas `tool_calls` no tienen `ToolMessage`, y OpenAI rechaza ese historial en el turno siguiente. `preguntar` cierra esas llamadas con `ToolMessage(status="error")` (`ERROR: no se ejecutó porque el turno se cortó por recursion_limit.`) usando `aupdate_state(..., as_node="herramientas")`. En la evidencia, el mismo `experimento-recursion-5` vuelve a preguntar con `recursion_limit=10` y responde.
+- **Por qué 10 por defecto.** El caso más largo de la demo usa 7 nodos. 10 deja margen para un reintento más sin dejar correr un bucle.
+
+Tests: `tests/test_recursion.py::test_recursion_limit_5_corta_el_caso_garcia` · `test_recursion_limit_7_alcanza_para_garcia` · `test_limite_igual_a_los_pasos_devuelve_la_respuesta_guardada` · `test_el_thread_sigue_usable_despues_del_corte` · `test_corte_despues_de_herramientas_no_agrega_cierres` · `test_experimento_con_los_tres_limites`
+
 ## Persistencia con SqliteSaver
 
 `abrir_agente` abre un `AsyncSqliteSaver` (la versión asíncrona de `SqliteSaver`, del paquete `langgraph-checkpoint-sqlite`). Lo hace con `from_conn_string("checkpoints.sqlite")`, corre `setup()` y compila el grafo con ese checkpointer. LangGraph guarda un checkpoint después de cada paso. Cada `ainvoke` con `{"configurable": {"thread_id": ...}}` arranca del último checkpoint de ese hilo.
@@ -196,10 +225,10 @@ Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuer
 
 ## Código y entorno
 
-- **Python 3.12.** `.python-version`, `requires-python = ">=3.12"` y el alias `type AppAgente = ...` (sintaxis de 3.12). `validacion.py` verifica la versión.
+- **Python 3.12.** `.python-version`, `requires-python = ">=3.12"` y el alias `type AppAgente = ...` (sintaxis de 3.12). Los puntos de entrada llaman a `exigir_python_312()` antes de importar el agente (ver [Versión de Python](#versión-de-python)).
 - **Tipado estático.** Todas las funciones tienen type hints y `python -m mypy .` pasa en modo `strict` sobre el código y los tests (`evidencias/03-mypy.txt`).
 - **asyncio.** El nodo es `async def nodo_modelo` con `await ...ainvoke(...)`, el checkpointer es `AsyncSqliteSaver` y la demo corre con `asyncio.run(main())`. El backoff usa `asyncio.sleep`.
-- **Credenciales.** Las claves solo salen del entorno o de `.env` (cargado con `python-dotenv`), y ninguna tiene valor por defecto. `.env` y `*.sqlite` están en `.gitignore`. El LLM se crea en la primera llamada y no al importar: si falta la clave, sale el `401/key` de abajo y no un error del SDK.
+- **Credenciales.** Las claves solo salen del entorno o de `.env` (cargado con `python-dotenv`), y ninguna tiene valor por defecto. `.env` y `*.sqlite` están en `.gitignore`, y `validacion.py` comprueba con `git ls-files` que ninguno de los dos esté versionado. El LLM se crea en la primera llamada y no al importar: si falta la clave, sale el `401/key` de abajo y no un error del SDK.
 - **Una sola definición.** El grafo se arma una vez en `agente.py`. `main.py` y `historial.py` lo abren con `abrir_agente` y no lo vuelven a armar.
 
 
@@ -210,7 +239,7 @@ Tests: `test_checkpointer_es_async_sqlite_saver` · `test_mismo_thread_id_recuer
 
 ```
 python -m pytest -v
-============================= 74 passed in 6.67s ==============================
+============================= 89 passed in 4.76s ==============================
 ```
 
 
@@ -259,9 +288,21 @@ python -m pytest -v
 
 **Mensaje:** `recursion_limit: el agente llegó a 10 pasos sin una respuesta final. Se cortó para no seguir gastando llamadas: reformulá la pregunta o revisá los docstrings de las herramientas.`
 
-**Cómo reproducirlo:** un modelo que pide herramientas sin parar. LangGraph lanza `GraphRecursionError` y `preguntar` la convierte en `LimiteRecursionError`.
+**Cómo reproducirlo:** un modelo que pide herramientas sin parar, o `python experimento_recursion.py --limites 5` (el caso "García" necesita 7 nodos). LangGraph lanza `GraphRecursionError` y `preguntar` la convierte en `LimiteRecursionError`. Antes, cierra con `ToolMessage` de error las `tool_calls` que quedaron sin ejecutar, para que el mismo `thread_id` siga aceptando preguntas.
 
-**Tests:** `tests/test_grafo.py::test_recursion_limit_corta_el_bucle` · `test_recursion_limit_de_la_llamada_llega_al_grafo`
+**Tests:** `tests/test_grafo.py::test_recursion_limit_corta_el_bucle` · `test_recursion_limit_de_la_llamada_llega_al_grafo` · `tests/test_recursion.py::test_recursion_limit_5_corta_el_caso_garcia` · `test_el_thread_sigue_usable_despues_del_corte`
+
+### Versión de Python
+
+**Mensaje:**
+
+```
+Python 3.12+ requerido: agente.py usa el alias `type` (PEP 695). Versión actual: 3.11. Creá el venv con `py -3.12 -m venv .venv` (Windows) o `python3.12 -m venv .venv` (Linux/macOS).
+```
+
+**Cómo reproducirlo:** `py -3.11 main.py` (`evidencias/08-python-311-rechazado.txt`). `requisitos.py` usa sintaxis que parsea en versiones viejas, así que el mensaje sale antes de que el import de `agente.py` falle con `SyntaxError`.
+
+**Tests:** `tests/test_requisitos.py::test_python_311_se_rechaza_con_el_mensaje` · `test_el_chequeo_corre_antes_de_importar_agente` · `test_requisitos_parsea_con_sintaxis_de_python_3_8`
 
 ### Consulta inválida (Pydantic)
 
@@ -320,11 +361,13 @@ No son excepciones. La herramienta devuelve un texto con `ERROR:` y le dice al m
 | `traza_ejecucion.json`                     | Traza de la demo real: por turno, `thread_id`, herramientas invocadas, respuesta, líneas ReAct y cada mensaje (`tipo`, `contenido`, `tool_calls`, `herramienta`). |
 | `traza_ejecucion.log`                      | El mismo recorrido en texto, con el formato `Usuario` / `→ El agente decide usar la herramienta` / `Respuesta`.                                                   |
 | `evidencias/01-validacion-offline.txt`     | `python validacion.py`: artefactos, traza real y la demo con el doble.                                                                                            |
-| `evidencias/02-pytest.txt`                 | `python -m pytest -v`: 74 tests.                                                                                                                                  |
+| `evidencias/02-pytest.txt`                 | `python -m pytest -v`: 89 tests.                                                                                                                                  |
 | `evidencias/03-mypy.txt`                   | `python -m mypy .` en modo strict.                                                                                                                                |
 | `evidencias/04-main-openai.txt`            | `python main.py` contra `gpt-4o-mini`, con el historial recuperado con `aget_state` + `pretty_print()`.                                                           |
 | `evidencias/05-historial-otro-proceso.txt` | `python historial.py conversacion-demo-1 "..."`: proceso nuevo, 16 mensajes recuperados de SQLite y un turno más con ese contexto.                                |
 | `evidencias/06-error-401-sin-clave.txt`    | `python main.py` sin clave: `Error controlado: 401/key ...` y código de salida 1.                                                                                 |
+| `evidencias/07-experimento-recursion-limit.txt` | `python experimento_recursion.py` contra `gpt-4o-mini`: con 5 corta, y con 7 y 10 responde. El mismo `thread_id` responde después del corte.                      |
+| `evidencias/08-python-311-rechazado.txt`   | `py -3.11 main.py`: el mensaje de `exigir_python_312()`.                                                                                                          |
 
 
 
@@ -332,7 +375,9 @@ No son excepciones. La herramienta devuelve un texto con `ERROR:` y le dice al m
 ## Checklist
 
 - [x] Repo sin API keys: variables de entorno, `.env.example` vacío y `.env` en `.gitignore`
-- [x] README con cómo levantar el entorno (Windows y Linux, Python 3.12 + venv)
+- [x] README con cómo levantar el entorno (Windows y Linux, Python 3.12 o superior + venv), con el requisito de versión al principio del setup
+- [x] `exigir_python_312()` antes de importar el agente, con un mensaje claro en 3.11
+- [x] `.env` y `*.sqlite` fuera de git (`git ls-files` en `validacion.py`)
 - [x] `StateGraph(MessagesState)` con nodo `modelo` + nodo `herramientas` y arista condicional `tools_condition`
 - [x] Arista `herramientas -> modelo` que cierra el ciclo ReAct, sin rutas `if/else` manuales
 - [x] Tres herramientas con `@tool`, docstring descriptivo y argumentos validados con Pydantic, que simulan consultas a una base de datos
@@ -340,6 +385,7 @@ No son excepciones. La herramienta devuelve un texto con `ERROR:` y le dice al m
 - [x] Persistencia con `AsyncSqliteSaver` (`SqliteSaver` asíncrono) + `thread_id`: recuerda la sesión, aísla otro hilo y sobrevive a reabrir el archivo
 - [x] Razonamiento multi-paso: la herramienta se invoca 2 veces (3 con el reintento) para llegar a la respuesta
 - [x] `recursion_limit` definido (10) en cada invocación, con error controlado al alcanzarlo
+- [x] Experimento con `recursion_limit` 5, 7 y 10 en el caso "García", con la salida real en `evidencias/`
 - [x] Ciclo de retorno: segundo intento ante un nombre incompleto y pedido de aclaración ante un cliente inexistente
 - [x] Historial recortado (`trim_messages`) antes de mandarlo al LLM
 - [x] Python 3.12, type hints con `mypy --strict` y `asyncio` de punta a punta

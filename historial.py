@@ -5,6 +5,10 @@ Uso:
     python historial.py conversacion-demo-1 "¿En qué estado está ese pedido?"
 """
 
+from requisitos import exigir_python_312
+
+exigir_python_312()
+
 import argparse
 import asyncio
 import sys

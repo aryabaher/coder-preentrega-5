@@ -1,0 +1,54 @@
+$ python experimento_recursion.py
+
+## recursion_limit=5 (thread_id=experimento-recursion-5)
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: ERROR: no se ejecutó porque el turno se cortó por recursion_limit.
+Error controlado: recursion_limit: el agente llegó a 5 pasos sin una respuesta final. Se cortó para no seguir gastando llamadas: reformulá la pregunta o revisá los docstrings de las herramientas.
+
+# Mismo thread_id, de nuevo con recursion_limit=10
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tiene un total de 3 pedidos y ha gastado $14.500."
+
+## recursion_limit=7 (thread_id=experimento-recursion-7)
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tiene un total de 3 pedidos y ha gastado $14.500."
+
+## recursion_limit=10 (thread_id=experimento-recursion-10)
+Usuario: "¿Cuántos pedidos tiene García?"
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='García')
+→ La herramienta devuelve: ERROR: 'García' es un nombre incompleto. Coincide con: Ana García. Volvé a llamar a buscar_cliente_por_nombre con el nombre completo; si hay más de una coincidencia, preguntale al usuario cuál es.
+→ El agente razona: la herramienta devolvió ERROR → hace un segundo intento.
+→ El agente decide usar la herramienta: buscar_cliente_por_nombre(nombre='Ana García')
+→ La herramienta devuelve: {"nombre": "Ana García", "cliente_id": 102}
+→ El agente razona: todavía le falta un dato → llama otra herramienta.
+→ El agente decide usar la herramienta: buscar_pedidos(cliente_id=102)
+→ La herramienta devuelve: {"cliente_id": 102, "pedidos": 3, "total": 14500}
+→ El agente razona: ya tiene los datos → responde.
+Respuesta: "Ana García tiene un total de 3 pedidos."
+
+Resumen: recursion_limit=5 cortó, recursion_limit=7 respondió, recursion_limit=10 respondió

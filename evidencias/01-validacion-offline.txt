@@ -35,15 +35,27 @@ $ python validacion.py
 [OK] main.py: mensaje.pretty_print()
 [OK] main.py: asyncio.run(main())
 [OK] main.py: load_dotenv(
+[OK] main.py: exigir_python_312()
+[OK] requisitos.py: VERSION_MINIMA = (3, 12)
+[OK] requisitos.py: Python 3.12+ requerido
+[OK] experimento_recursion.py: LIMITES = (5, 7, 10)
+[OK] experimento_recursion.py: recursion_limit=limite
+[OK] experimento_recursion.py: except LimiteRecursionError
+[OK] README.md: Python 3.12 o superior
+[OK] README.md: py -3.12 -m venv .venv
+[OK] README.md: ## Experimento con recursion_limit
 [OK] un solo StateGraph
 [OK] agente.py sin claves
 [OK] herramientas.py sin claves
 [OK] modelo.py sin claves
 [OK] main.py sin claves
+[OK] requisitos.py sin claves
+[OK] experimento_recursion.py sin claves
 [OK] historial.py sin claves
 [OK] .env.example sin claves
 [OK] .env.example con las claves vacías
 [OK] .gitignore excluye .env y la base SQLite
+[OK] git ls-files sin .env ni SQLite - 32 archivos versionados
 [OK] traza_ejecucion.json con el LLM real - openai:gpt-4o-mini
 [OK] traza: recursion_limit 10
 [OK] traza: turno 1 llama 2 herramientas - buscar_cliente_por_nombre(nombre='Ana García'), buscar_pedidos(cliente_id=102)
@@ -104,14 +116,14 @@ Usuario: "¿Y el último?"
 → El agente razona: no necesita herramientas o le falta contexto → responde.
 Respuesta: "¿De qué cliente querés ver el último pedido? Pasame el nombre o el cliente_id."
 
---- conversacion-demo-1: 16 mensajes en C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\checkpoints.sqlite ---
+--- conversacion-demo-1: 16 mensajes en C:\Users\abaher\AppData\Local\Temp\tmp8568y0yt\checkpoints.sqlite ---
 ================================ Human Message =================================
 
 ¿Cuántos pedidos tuvo Ana García y cuál fue el total?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_cliente_por_nombre (call_59b968247c30)
- Call ID: call_59b968247c30
+  buscar_cliente_por_nombre (call_1932c8aba20c)
+ Call ID: call_1932c8aba20c
   Args:
     nombre: Ana García
 ================================= Tool Message =================================
@@ -120,8 +132,8 @@ Name: buscar_cliente_por_nombre
 {"nombre": "Ana García", "cliente_id": 102}
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_pedidos (call_242dce8e617d)
- Call ID: call_242dce8e617d
+  buscar_pedidos (call_fe13d251e5dc)
+ Call ID: call_fe13d251e5dc
   Args:
     cliente_id: 102
 ================================= Tool Message =================================
@@ -136,8 +148,8 @@ Ana García tuvo 3 pedidos por un total de $14.500.
 ¿Y el último?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_ultimo_pedido (call_87be94660839)
- Call ID: call_87be94660839
+  buscar_ultimo_pedido (call_284ac0e99514)
+ Call ID: call_284ac0e99514
   Args:
     cliente_id: 102
 ================================= Tool Message =================================
@@ -152,8 +164,8 @@ El último pedido de Ana García es P-1023, del 2026-09-28, por $6.200 (entregad
 ¿Y Juan Pérez?
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_cliente_por_nombre (call_9545562d68a6)
- Call ID: call_9545562d68a6
+  buscar_cliente_por_nombre (call_5c7875e6586d)
+ Call ID: call_5c7875e6586d
   Args:
     nombre: Juan Pérez
 ================================= Tool Message =================================
@@ -162,8 +174,8 @@ Name: buscar_cliente_por_nombre
 {"nombre": "Juan Pérez", "cliente_id": 205}
 ================================== Ai Message ==================================
 Tool Calls:
-  buscar_ultimo_pedido (call_59c4a471b48c)
- Call ID: call_59c4a471b48c
+  buscar_ultimo_pedido (call_865192490b80)
+ Call ID: call_865192490b80
   Args:
     cliente_id: 205
 ================================= Tool Message =================================
@@ -174,7 +186,7 @@ Name: buscar_ultimo_pedido
 
 El último pedido de Juan Pérez es P-2051, del 2026-08-14, por $3.200 (entregado).
 
-Traza guardada en C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\traza.json y C:\Users\abaher\AppData\Local\Temp\tmph5nkhodp\traza.log
+Traza guardada en C:\Users\abaher\AppData\Local\Temp\tmp8568y0yt\traza.json y C:\Users\abaher\AppData\Local\Temp\tmp8568y0yt\traza.log
 [OK] demo: multi-paso
 [OK] demo: memoria por thread_id
 [OK] demo: segundo intento
